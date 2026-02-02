@@ -18,6 +18,7 @@ const $ = (selector, scope = document) => scope.querySelector(selector);
 
 const tableInput = $("#table-input");
 const delimiterInput = $("#delimiter-input");
+const colorModeSelect = $("#color-mode");
 const rangeMinInput = $("#range-min");
 const rangeMaxInput = $("#range-max");
 const rangeHint = $("#range-hint");
@@ -132,6 +133,8 @@ const getInterpolator = () => {
   return selected.interpolator;
 };
 
+const getColorMode = () => colorModeSelect?.value || "table";
+
 const updateGradientPreview = () => {
   gradientPreview.style.backgroundImage = buildGradientCss(getInterpolator());
 };
@@ -140,6 +143,21 @@ const updateCustomInputsState = () => {
   const enabled = customToggle.checked;
   lowColorInput.disabled = !enabled;
   highColorInput.disabled = !enabled;
+};
+
+const updateRangeModeState = (mode, autoMin, autoMax) => {
+  const isTableMode = mode === "table";
+  rangeMinInput.disabled = !isTableMode;
+  rangeMaxInput.disabled = !isTableMode;
+  if (!rangeHint || isTableMode) return;
+  if (Number.isFinite(autoMin) && Number.isFinite(autoMax)) {
+    rangeHint.textContent =
+      mode === "rows"
+        ? "Row ranges are calculated from each row's numeric values."
+        : "Column ranges are calculated from each column's numeric values.";
+  } else {
+    rangeHint.textContent = "No numeric values found in the table.";
+  }
 };
 
 const parseTable = (text) => {
@@ -220,6 +238,8 @@ const renderEmptyState = () => {
 
 const renderTable = () => {
   const raw = tableInput.value;
+  const mode = getColorMode();
+  updateRangeModeState(mode, null, null);
   if (!raw.trim()) {
     alertContainer?.replaceChildren();
     renderEmptyState();
@@ -238,10 +258,33 @@ const renderTable = () => {
     const numericValues = numericGrid.flat().filter((value) => Number.isFinite(value));
     const autoMin = numericValues.length ? Math.min(...numericValues) : null;
     const autoMax = numericValues.length ? Math.max(...numericValues) : null;
-    updateRangeInputs(autoMin, autoMax);
-    const { min, max } = resolveRange(autoMin, autoMax);
     const interpolator = getInterpolator();
-    const scale = buildScale(min, max, interpolator);
+    updateRangeModeState(mode, autoMin, autoMax);
+    let tableScale = null;
+    let rowScales = null;
+    let columnScales = null;
+    if (mode === "table") {
+      updateRangeInputs(autoMin, autoMax);
+      const { min, max } = resolveRange(autoMin, autoMax);
+      tableScale = buildScale(min, max, interpolator);
+    } else if (mode === "rows") {
+      rowScales = numericGrid.map((row) => {
+        const values = row.filter((value) => Number.isFinite(value));
+        if (!values.length) return null;
+        return buildScale(Math.min(...values), Math.max(...values), interpolator);
+      });
+    } else {
+      const columnValues = Array.from({ length: header.length }, () => []);
+      numericGrid.forEach((row) => {
+        row.forEach((value, colIndex) => {
+          if (Number.isFinite(value)) columnValues[colIndex].push(value);
+        });
+      });
+      columnScales = columnValues.map((values) => {
+        if (!values.length) return null;
+        return buildScale(Math.min(...values), Math.max(...values), interpolator);
+      });
+    }
 
     const table = document.createElement("table");
     const thead = document.createElement("thead");
@@ -263,6 +306,12 @@ const renderTable = () => {
         const isRowHeader = hasRowHeaders && colIndex === 0;
         const numericValue = numericGrid[rowIndex][colIndex];
         const isNumeric = Number.isFinite(numericValue);
+        const scale =
+          mode === "table"
+            ? tableScale
+            : mode === "rows"
+              ? rowScales?.[rowIndex]
+              : columnScales?.[colIndex];
         const cellEl = document.createElement(isRowHeader ? "th" : "td");
         if (isRowHeader) cellEl.scope = "row";
         cellEl.textContent = cell;
@@ -307,6 +356,7 @@ renderTable();
 
 tableInput.addEventListener("input", renderTable);
 delimiterInput.addEventListener("input", renderTable);
+colorModeSelect?.addEventListener("change", renderTable);
 rangeMinInput.addEventListener("input", renderTable);
 rangeMaxInput.addEventListener("input", renderTable);
 gradientSelect.addEventListener("change", () => {
