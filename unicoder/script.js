@@ -54,7 +54,7 @@ const toUnicodeStyle = (text, { upper, lower, digit = null }) => {
       let offset = 0;
       if (char >= "A" && char <= "Z") offset = upper;
       if (char >= "a" && char <= "z") offset = lower;
-      if (char >= "0" && char <= "9") offset ??= digit;
+      if (char >= "0" && char <= "9") offset = digit ?? offset;
       return String.fromCodePoint(char.charCodeAt(0) + offset);
     })
     .join("");
