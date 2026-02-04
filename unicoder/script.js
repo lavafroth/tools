@@ -51,16 +51,11 @@ const toUnicodeStyle = (text, { upper, lower, digit = null }) => {
   return text
     .split("")
     .map((char) => {
-      if (char >= "A" && char <= "Z") {
-        return String.fromCodePoint(char.charCodeAt(0) + upper);
-      }
-      if (char >= "a" && char <= "z") {
-        return String.fromCodePoint(char.charCodeAt(0) + lower);
-      }
-      if (digit !== null && char >= "0" && char <= "9") {
-        return String.fromCodePoint(char.charCodeAt(0) + digit);
-      }
-      return char;
+      let offset = 0;
+      if (char >= "A" && char <= "Z") offset = upper;
+      if (char >= "a" && char <= "z") offset = lower;
+      if (char >= "0" && char <= "9") offset ??= digit;
+      return String.fromCodePoint(char.charCodeAt(0) + offset);
     })
     .join("");
 };
